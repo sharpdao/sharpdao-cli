@@ -2,7 +2,7 @@
 
 namespace SharpDao.Cli.Models;
 
-public class Token: MonetaryAmount
+public class Treasury: MonetaryAmount
 {
     public OneOrMany<Dao> Dao { get; set; } //DAO DID Ref
     
