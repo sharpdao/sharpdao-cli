@@ -1,21 +1,19 @@
-﻿namespace SharpDao.Cli.Models;
+﻿using System.ComponentModel.DataAnnotations;
+using Schema.NET;
 
-public class Dao
+namespace SharpDao.Cli.Models;
+
+public class Dao: Organization
 {
-    #region Details
-    public Guid Id { get; set; }
-    public int DaoType { get; set; }
-    public string Name { get; set; }
-    #endregion
+    public OneOrMany<string> Quorum { get; set; } //float (0-1): Minimum participation, or quorum, is the minimum level of participation required for a vote to be valid
+    public OneOrMany<string> PassRate { get; set; } //float (0-1): The pass rate is the percentage of votes cast that need to be in favor for the proposal to be accepted.
+    public OneOrMany<string> VotingDays { get; set; } //int: The voting period is how long the vote is active.
     
-    #region Governance
-    public decimal Support { get; set; }
-    public decimal Approval { get; set; }
-    public int VotingDurationDays { get; set; }
-    #endregion
-    
-    #region Token
-    public string TokenName { get; set; }
-    public string TokenSymbol { get; set; }
-    #endregion
+    //name = name of the DAO
+    //alternateName = if the DAO goes by another name
+    //description = a description of the DAO
+    //logo = a logo of the DAO
+    //url = the website of the DAO
+    //founder = a Person(s) who started the DAO
+    //foundingDate = the date when the DAO was created
 }
