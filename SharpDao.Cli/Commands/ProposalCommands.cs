@@ -1,7 +1,13 @@
-﻿using System.Text.Json.Serialization.Metadata;
+﻿using System.Runtime.Serialization.Formatters.Binary;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json.Serialization.Metadata;
+using CardanoSharp.Wallet.Encoding;
+using CardanoSharp.Wallet.Extensions.Models;
+using CardanoSharp.Wallet.Models.Keys;
 using Cocona;
 using Newtonsoft.Json;
 using SharpDao.Cli.Constants;
+using SharpDao.Core;
 using SharpDao.Core.Enums;
 using SharpDao.Core.Extensions;
 using SharpDao.Core.Models;
@@ -28,6 +34,7 @@ public class ProposalCommands
             });
             x.AddCommand("list", ListProposalCommand);
             x.AddCommand("vote", VoteProposalCommand);
+            x.AddCommand("execute", ExecuteProposalCommand);
         });
     }
 
@@ -54,7 +61,7 @@ public class ProposalCommands
                     return;
                 }
 
-                author = FileStorage.ReadIdentityAsync(authorFile);
+                author = FileStorage.ReadAsync<Identity>(authorFile);
                 break;
         }
         
@@ -78,7 +85,7 @@ public class ProposalCommands
                     return;
                 }
 
-                dao = FileStorage.ReadDaoAsync(
+                dao = FileStorage.ReadAsync<Dao>(
                     Path.Combine(daoDir, "dao.json"));
                 
                 break;
@@ -103,7 +110,7 @@ public class ProposalCommands
                     return;
                 }
 
-                invitee = FileStorage.ReadIdentityAsync(inviteeFile);
+                invitee = FileStorage.ReadAsync<Identity>(inviteeFile);
                 break;
         }
 
@@ -121,6 +128,20 @@ public class ProposalCommands
             Expires = unixTime.ToString()
         };
         proposal.CreateChoices();
+        
+        switch (daoStorageType)
+        {
+            case StorageTypes.File:
+                var proposalDir = Path.Combine(CommonConstants.DaoStorage, daoId, "proposals");
+
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId()));
+
+                FileStorage.SaveAsync<Proposal>(proposal,
+                    Path.Combine(proposalDir, proposal.GetDidId(), "proposal.json"));
+                
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId(), "votes"));
+                break;
+        }
         
         Console.WriteLine(JsonSerializer.Serialize(proposal));
     }
@@ -148,7 +169,7 @@ public class ProposalCommands
                     return;
                 }
 
-                author = FileStorage.ReadIdentityAsync(authorFile);
+                author = FileStorage.ReadAsync<Identity>(authorFile);
                 break;
         }
         
@@ -172,7 +193,7 @@ public class ProposalCommands
                     return;
                 }
 
-                dao = FileStorage.ReadDaoAsync(
+                dao = FileStorage.ReadAsync<Dao>(
                     Path.Combine(daoDir, "dao.json"));
                 
                 break;
@@ -192,6 +213,20 @@ public class ProposalCommands
             Expires = unixTime.ToString()
         };
         proposal.CreateChoices();
+        
+        switch (daoStorageType)
+        {
+            case StorageTypes.File:
+                var proposalDir = Path.Combine(CommonConstants.DaoStorage, daoId, "proposals");
+
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId()));
+
+                FileStorage.SaveAsync<Proposal>(proposal,
+                    Path.Combine(proposalDir, proposal.GetDidId(), "proposal.json"));
+                
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId(), "votes"));
+                break;
+        }
         
         Console.WriteLine(JsonSerializer.Serialize(proposal));
     }
@@ -219,7 +254,7 @@ public class ProposalCommands
                     return;
                 }
 
-                author = FileStorage.ReadIdentityAsync(authorFile);
+                author = FileStorage.ReadAsync<Identity>(authorFile);
                 break;
         }
         
@@ -243,7 +278,7 @@ public class ProposalCommands
                     return;
                 }
 
-                dao = FileStorage.ReadDaoAsync(
+                dao = FileStorage.ReadAsync<Dao>(
                     Path.Combine(daoDir, "dao.json"));
                 
                 break;
@@ -286,6 +321,20 @@ public class ProposalCommands
         
         proposal.CreateChoices();
         
+        switch (daoStorageType)
+        {
+            case StorageTypes.File:
+                var proposalDir = Path.Combine(CommonConstants.DaoStorage, daoId, "proposals");
+
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId()));
+
+                FileStorage.SaveAsync<Proposal>(proposal,
+                    Path.Combine(proposalDir, proposal.GetDidId(), "proposal.json"));
+                
+                Directory.CreateDirectory(Path.Combine(proposalDir, proposal.GetDidId(), "votes"));
+                break;
+        }
+        
         Console.WriteLine(JsonSerializer.Serialize(proposal));
     }
 
@@ -304,13 +353,189 @@ public class ProposalCommands
         
     }
 
-    private static void VoteProposalCommand()
+    private static void VoteProposalCommand([Argument] string authorDid)
     {
+        var daoDid = AnsiConsole.Ask<string>("[green]Dao Did[/]:");
+        var proposalDid = AnsiConsole.Ask<string>("[green]Proposal Did[/]:");
+        StorageTypes proposalStorageType = AnsiConsole.Prompt(
+            new SelectionPrompt<StorageTypes>()
+                .Title("[green]Proposal Source[/]:")
+                .AddChoices(new[] {
+                    StorageTypes.File
+                }));
+
+        Proposal? proposal = null;
+        string proposalDir = string.Empty;
+        switch (proposalStorageType)
+        {
+            case StorageTypes.File:
+                proposalDir = Path.Combine(CommonConstants.DaoStorage, daoDid.GetDidId(), "proposals", proposalDid.GetDidId());
+
+                proposal = FileStorage.ReadAsync<Proposal>(
+                    Path.Combine(proposalDir, "proposal.json"));
+                break;
+        }
         
+        DateTime expirationDate = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        expirationDate = expirationDate.AddSeconds(int.Parse(proposal.Expires));
+
+        AnsiConsole.Markup($"[grey]Expiration: [blue]{expirationDate.ToString("MM/dd/yyyy")}[/][/]");
+        AnsiConsole.Markup($"[grey]Summary: [white]{proposal.Summary}[/][/]");
+        ProposalChoice selectedChoice = AnsiConsole.Prompt(
+            new SelectionPrompt<ProposalChoice>()
+                .Title($"[green]{proposal.Title}[/]:")
+                .AddChoices(proposal.PotentialChoices)
+                .UseConverter(x =>
+                {
+                    return x.Choice;
+                }));
+        
+        StorageTypes authorStorage = AnsiConsole.Prompt(
+            new SelectionPrompt<StorageTypes>()
+                .Title("[green]Author Source[/]:")
+                .AddChoices(new[] {
+                    StorageTypes.File
+                }));
+
+        Identity? author = null;
+        switch (authorStorage)
+        {
+            case StorageTypes.File:
+                author = FileStorage.ReadAsync<Identity>(
+                    Path.Combine(CommonConstants.IdentityStorage, $"{authorDid.GetDidId()}.json"));
+                break;
+        }
+
+        var vote = new ProposalVote()
+        {
+            Did = Guid.NewGuid().ToString(),
+            ProposalDid = proposalDid,
+            SelectedChoiceDids = new List<string>()
+            {
+                selectedChoice.Did
+            },
+            Voter = authorDid
+        };
+        
+        var skey = new PrivateKey(Bech32.Decode(author.Skey, out _, out _), null);
+
+        var bf = new BinaryFormatter();
+        MemoryStream ms = new MemoryStream();
+        bf.Serialize(ms, vote);
+        var message = ms.ToArray();
+        var sig = skey.Sign(message);
+
+        var signedPayload = new SignedPayload<ProposalVote>()
+        {
+            Payload = vote,
+            Signature = new SignedSignature()
+            {
+                SignerDid = author.Did,
+                Sig = Bech32.Encode(sig, "sig")
+            }
+        };
+        
+        switch (authorStorage)
+        {
+            case StorageTypes.File:
+                FileStorage.SaveAsync(signedPayload,
+                    Path.Combine(proposalDir, "votes", $"{vote.GetDidId()}.json"));
+                break;
+        }
+        
+        Console.WriteLine(JsonSerializer.Serialize(signedPayload));
     }
 
-    private static void ExecuteProposalCommand()
+    private static void ExecuteProposalCommand([Argument] string authorDid)
     {
+        var daoDid = AnsiConsole.Ask<string>("[green]Dao Did[/]:");
+        var proposalDid = AnsiConsole.Ask<string>("[green]Proposal Did[/]:");
+        StorageTypes proposalStorageType = AnsiConsole.Prompt(
+            new SelectionPrompt<StorageTypes>()
+                .Title("[green]Proposal Source[/]:")
+                .AddChoices(new[] {
+                    StorageTypes.File
+                }));
+
+        Dao? dao = null;
+        string daoDir = string.Empty;
+        switch (proposalStorageType)
+        {
+            case StorageTypes.File:
+                daoDir = Path.Combine(CommonConstants.DaoStorage, daoDid.GetDidId());
+
+                dao = FileStorage.ReadAsync<Dao>(
+                    Path.Combine(daoDir, "dao.json"));
+                break;
+        }
+
+        Proposal? proposal = null;
+        string proposalDir = string.Empty;
+        switch (proposalStorageType)
+        {
+            case StorageTypes.File:
+                proposalDir = Path.Combine(CommonConstants.DaoStorage, daoDid.GetDidId(), "proposals", proposalDid.GetDidId());
+
+                proposal = FileStorage.ReadAsync<Proposal>(
+                    Path.Combine(proposalDir, "proposal.json"));
+                break;
+        }
+
+        List<SignedPayload<ProposalVote>> votes = new List<SignedPayload<ProposalVote>>();
+        switch (proposalStorageType)
+        {
+            case StorageTypes.File:
+                var votesDir = Path.Combine(proposalDir, "votes");
+                var voteFiles = Directory.EnumerateFiles(votesDir);
+                foreach (var voteFile in voteFiles)
+                {
+                    var vote = FileStorage.ReadAsync<SignedPayload<ProposalVote>>(voteFile);
+                    votes.Add(vote);
+                }
+                break;
+        }
+        
+        //TODO add validations
+        // - voters belong to dao
+        // - proposal isnt expired
+        // - enough members have voted
+        
+        AnsiConsole.WriteLine($"{proposal.Title}");
+        AnsiConsole.WriteLine($"Choices:");
+        List<TalliedVote> tallies = new List<TalliedVote>();
+        foreach (var proposalPotentialChoice in proposal.PotentialChoices)
+        {
+            tallies.Add(new TalliedVote()
+            {
+                Choice = proposalPotentialChoice,
+                Count = 0
+            });
+        }
+        
+        foreach (var proposalVote in votes)
+        {
+            AnsiConsole.WriteLine($"Vote is for Proposal? {proposal.Did == proposalVote.Payload.ProposalDid}");
+            List<ProposalChoice> selectedChoices = new List<ProposalChoice>();
+            foreach (var selectedChoiceDid in proposalVote.Payload.SelectedChoiceDids)
+            {
+                var c = proposal.PotentialChoices.FirstOrDefault(x => x.Did == selectedChoiceDid);
+                if(c is not null) selectedChoices.Add(c);
+            }
+
+            foreach (var selectedChoice in selectedChoices)
+            {
+                var tally = tallies.FirstOrDefault(x => x.Choice.Did == selectedChoice.Did);
+                if (tally is not null)
+                {
+                    tally.Count += 1;
+                }
+            }
+        }
+        
+        foreach (var choice in tallies)
+        {
+            AnsiConsole.WriteLine($" - {choice.Choice.Choice}: {choice.Count}");
+        }
         
     }
 }

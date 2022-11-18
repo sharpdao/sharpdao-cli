@@ -52,7 +52,7 @@ public static class IdentityCommands
         switch (storageType)
         {
             case StorageTypes.File:
-                FileStorage.SaveIdentityAsync(identity, Path.Combine(CommonConstants.IdentityStorage, $"{identity.GetId()}.json"));
+                FileStorage.SaveAsync<Identity>(identity, Path.Combine(CommonConstants.IdentityStorage, $"{identity.GetDidId()}.json"));
                 break;
         }
 

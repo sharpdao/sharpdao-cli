@@ -55,7 +55,7 @@ public static class DaoCommands
         switch (storageType)
         {
             case StorageTypes.File:
-                var dirPath = Path.Combine(CommonConstants.DaoStorage, dao.GetId());
+                var dirPath = Path.Combine(CommonConstants.DaoStorage, dao.GetDidId());
                 if (Directory.Exists(dirPath))
                 {
                     AnsiConsole.Markup("[red bold]DAO with name already exists[/]");
@@ -63,8 +63,8 @@ public static class DaoCommands
                 }
                 
                 Directory.CreateDirectory(dirPath);
-                FileStorage.SaveDaoAsync(dao, Path.Combine(dirPath, "dao.json"));
-                Directory.CreateDirectory(Path.Combine(dirPath, "workspaces"));
+                FileStorage.SaveAsync<Dao>(dao, Path.Combine(dirPath, "dao.json"));
+                Directory.CreateDirectory(Path.Combine(dirPath, "proposals"));
                 break;
         }
         
